@@ -64,8 +64,8 @@ transport.type: local
 discovery.type: single-node
 
 # CORS settings for local testing only
-# http.cors.enabled: true
-# http.cors.allow-origin: '*'
+http.cors.enabled: true
+http.cors.allow-origin: '*'
 http.enabled: true
 
 # Set a port for HTTP (9200 is the default, or with no port specified looks at subsequent ports to find one open):

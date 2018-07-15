@@ -86,8 +86,55 @@ class ElasticSearchUtil {
             client.admin().indices().preparePutMapping(esIndexName).setType(dataDocumentId).setSource(docMapping).get()
         } else {
             logger.info("Creating ElasticSearch index ${esIndexName} for ${dataDocumentId} with alias ${indexName} and adding document mapping")
-            client.admin().indices().prepareCreate(esIndexName).addMapping(dataDocumentId, docMapping).get()
-            // logger.warn("========== Added mapping for ${dataDocumentId} to index ${esIndexName}:\n${docMapping}")
+            /********************************************
+             * 扩展中文分词和拼音全文检索的支持 INDEX BEGIN *
+             *******************************************/
+            //analyzer这里可以设置别名，如ik_pinyin_analyzer；如果设置为default(默认),就不需要在索引和检索的时候指定了
+            //这里可以指定tokenizer的分词模式：
+            // ik_max_word: 会将文本做最细粒度的拆分，比如会将"中华人民共和国国歌"拆分为"中华人民共和国,中华人民,中华,华人,人民共和国,人民,人,民,共和国,共和,和,国国,国歌"，会穷尽各种可能的组合；
+            //ik_smart: 会做最粗粒度的拆分，比如会将"中华人民共和国国歌"拆分为"中华人民共和国,国歌"。
+            //仅仅使用ik插件
+//            String esCNIndexSettingsIk =
+//                "{\"index\": " +
+//                    "{\"analysis\": " +
+//                        "{\"analyzer\": " +
+//                            "{\"default\": " +
+//                                "{" +
+//                                    "\"tokenizer\": \"ik_max_word\"" +
+//                                "}" +
+//                            "}" +
+//                        "}" +
+//                    "}" +
+//                "}"
+            //使用 ik + pinyin 插件
+            String esCNIndexSettings =
+                "{\"index\": " +
+                    "{\"analysis\": " +
+                        "{\"analyzer\": " +
+                            "{\"ik_pinyin_analyzer\": " +
+                                "{" +
+                                    "\"type\": \"custom\"," +
+                                    "\"tokenizer\": \"ik_max_word\"," +
+                                    "\"filter\": [\"my_pinyin\",\"word_delimiter\"]" +
+                                "}" +
+                            "}," +
+                        "\"filter\": " +
+                            "{\"my_pinyin\": " +
+                                "{" +
+                                    "\"type\": \"pinyin\"," +
+                                    "\"lowercase\": \"true\"," +
+                                    "\"keep_full_pinyin\": \"true\"" +
+                                "}" +
+                            "}" +
+                        "}" +
+                    "}" +
+                "}"
+            //logger.warn("========== esCNIndexSettings is==========:\n${esCNIndexSettings}")
+            client.admin().indices().prepareCreate(esIndexName).setSettings(esCNIndexSettings).addMapping(dataDocumentId, docMapping).get()
+            /******************************************
+             * 扩展中文分词和拼音全文检索的支持 INDEX END *
+             ******************************************/
+            //logger.warn("========== Added mapping for ${dataDocumentId} to index ${esIndexName}:\n${docMapping}")
             // add an alias (indexName) for the index (dataDocumentId.toLowerCase())
             client.admin().indices().prepareAliases().addAlias(esIndexName, indexName).get()
         }
@@ -204,6 +251,20 @@ class ElasticSearchUtil {
         if (!mappingType) mappingType = esTypeMap.get(fieldType) ?: 'text'
         Map<String, Object> propertyMap = new LinkedHashMap<>()
         propertyMap.put("type", mappingType)
+        /**********************************************
+         * 扩展中文分词和拼音全文检索的支持 MAPPING BEGIN *
+         **********************************************/
+        if("text".equals(mappingType)) {
+            //如果上面的settings中的index指定了analyzer的别名，如ik_pinyin_analyzer，mapping这里需要配置同样的analyzer(仅使用ik时使用)
+            //propertyMap.put("analyzer", "ik_pinyin_analyzer")
+            //如果同时使用ik和pinyin时，这里mapping结构需要变化一下，变为fields的Map结构
+            def pinyinProps =["pinyin":["type":"text","store":false,"term_vector":"with_positions_offsets","analyzer":"ik_pinyin_analyzer","boost":10]]
+            //logger.warn("========== pinyinProps is==========:\n${pinyinProps}")
+            propertyMap.put("fields", pinyinProps)
+        }
+        /********************************************
+         * 扩展中文分词和拼音全文检索的支持 MAPPING END *
+         ********************************************/
         if ("Y".equals(sortable) && "text".equals(mappingType)) propertyMap.put("fields", [keyword: [type: "keyword"]])
         if ("date-time".equals(fieldType)) propertyMap.format = "date_time||epoch_millis||date_time_no_millis||yyyy-MM-dd HH:mm:ss.SSS||yyyy-MM-dd HH:mm:ss.S||yyyy-MM-dd"
         else if ("date".equals(fieldType)) propertyMap.format = "date||strict_date_optional_time||epoch_millis"
