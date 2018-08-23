@@ -15,14 +15,15 @@ package org.moqui.elasticsearch
 
 import groovy.json.JsonOutput
 import groovy.transform.CompileStatic
+import org.elasticsearch.action.search.SearchRequest
 import org.elasticsearch.action.search.SearchRequestBuilder
 import org.elasticsearch.action.search.SearchResponse
-import org.elasticsearch.client.Client
 import org.elasticsearch.index.query.QueryBuilders
 import org.elasticsearch.search.aggregations.AggregationBuilder
 import org.elasticsearch.search.aggregations.AggregationBuilders
 import org.elasticsearch.search.aggregations.bucket.terms.Terms
 import org.elasticsearch.search.aggregations.metrics.sum.Sum
+import org.elasticsearch.search.builder.SearchSourceBuilder
 import org.moqui.entity.EntityException
 import org.moqui.entity.EntityList
 import org.moqui.entity.EntityValue
@@ -46,34 +47,19 @@ class ElasticSearchUtil {
         return EntityJavaUtil.camelCaseToUnderscored(dataDocumentId).toLowerCase()
     }
 
-    // NOTE: called in service scripts
     static boolean checkIndexExists(String indexName, ExecutionContextImpl eci) {
-        Client client = (Client) eci.getTool("ElasticSearch", Client.class)
-        if (client.admin().indices().prepareAliasesExist(indexName).get().exists) return true
-        return client.admin().indices().prepareExists(indexName).get().exists
+        EsClient esClient = (EsClient) eci.getTool("ElasticSearch", EsClient.class)
+        return esClient.checkIndexExists(indexName)
     }
-
-    // NOTE: called in service scripts
     static synchronized void checkCreateIndex(String indexName, ExecutionContextImpl eci) {
-        Client client = (Client) eci.getTool("ElasticSearch", Client.class)
-
-        // if the index alias exists call it good
-        if (client.admin().indices().prepareAliasesExist(indexName).get().exists) return
-
-        EntityList ddList = eci.entityFacade.find("moqui.entity.document.DataDocument").condition("indexName", indexName).list()
-        for (EntityValue dd in ddList) storeIndexAndMapping(indexName, dd, client, eci)
+        EsClient esClient = (EsClient) eci.getTool("ElasticSearch", EsClient.class)
+        esClient.checkCreateIndex(indexName)
     }
-
-    // NOTE: called in service scripts
     static synchronized void checkCreateDocIndex(String dataDocumentId, ExecutionContextImpl eci) {
-        Client client = (Client) eci.getTool("ElasticSearch", Client.class)
-
-        String idxName = ddIdToEsIndex(dataDocumentId)
-        if (client.admin().indices().prepareExists(idxName).get().exists) return
-
-        EntityValue dd = eci.entityFacade.find("moqui.entity.document.DataDocument").condition("dataDocumentId", dataDocumentId).one()
-        storeIndexAndMapping((String) dd.indexName, dd, client, eci)
+        EsClient esClient = (EsClient) eci.getTool("ElasticSearch", EsClient.class)
+        esClient.checkCreateDocIndex(dataDocumentId)
     }
+<<<<<<< HEAD
 
     protected static void storeIndexAndMapping(String indexName, EntityValue dd, Client client, ExecutionContextImpl eci) {
         String dataDocumentId = (String) dd.getNoCheckSimple("dataDocumentId")
@@ -141,11 +127,11 @@ class ElasticSearchUtil {
     }
 
     // NOTE: called in service scripts
+=======
+>>>>>>> 943d0a5c08c4669ded45287a1bbf752901627d7d
     static void putIndexMappings(String indexName, ExecutionContextImpl eci) {
-        Client client = (Client) eci.getTool("ElasticSearch", Client.class)
-
-        EntityList ddList = eci.entity.find("moqui.entity.document.DataDocument").condition("indexName", indexName).list()
-        for (EntityValue dd in ddList) storeIndexAndMapping(indexName, dd, client, eci)
+        EsClient esClient = (EsClient) eci.getTool("ElasticSearch", EsClient.class)
+        esClient.putIndexMappings(indexName)
     }
 
     static final Map<String, String> esTypeMap = [id:'keyword', 'id-long':'keyword', date:'date', time:'text',
@@ -278,8 +264,12 @@ class ElasticSearchUtil {
             Object valObj = entry.getValue()
             if (valObj instanceof Timestamp) {
                 entry.setValue(((Timestamp) valObj).getTime())
+            } else if (valObj instanceof java.sql.Date) {
+                entry.setValue(valObj.toString())
             } else if (valObj instanceof BigDecimal) {
                 entry.setValue(((BigDecimal) valObj).doubleValue())
+            } else if (valObj instanceof GString) {
+                entry.setValue(valObj.toString())
             } else if (valObj instanceof Map) {
                 convertTypesForEs((Map) valObj)
             } else if (valObj instanceof Collection) {
@@ -300,20 +290,21 @@ class ElasticSearchUtil {
         String queryJson = queryMap != null ? JsonOutput.toJson(queryMap) : null
         // logger.warn("aggregationSearch queryJson: ${JsonOutput.prettyPrint(queryJson)}")
 
-        Client elasticSearchClient = (Client) eci.getTool("ElasticSearch", Client.class)
+        EsClient esClient = (EsClient) eci.getTool("ElasticSearch", EsClient.class)
         // make sure index exists
-        checkCreateIndex(indexName, eci)
+        esClient.checkCreateIndex(indexName)
 
         // get the search hits
-        SearchRequestBuilder srb = elasticSearchClient.prepareSearch().setIndices(indexName)
-        if (maxResults != null) srb.setSize(maxResults)
-        if (documentTypeList) srb.setTypes((String[]) documentTypeList.toArray(new String[documentTypeList.size()]))
-        if (queryJson) srb.setQuery(QueryBuilders.wrapperQuery(queryJson))
-        srb.addAggregation(aggBuilder)
-        // logger.warn("aggregationSearch srb: ${srb.toString()}")
+        SearchRequest searchRequest = new SearchRequest(indexName)
+        SearchSourceBuilder sourceBuilder = searchRequest.source()
+        if (maxResults != null) sourceBuilder.size(maxResults)
+        if (documentTypeList) searchRequest.types((String[]) documentTypeList.toArray(new String[documentTypeList.size()]))
+        if (queryJson) sourceBuilder.query(QueryBuilders.wrapperQuery(queryJson))
+        sourceBuilder.aggregation(aggBuilder)
+        // logger.warn("aggregationSearch searchRequest: ${searchRequest.toString()}")
 
         try {
-            SearchResponse searchResponse = srb.execute().actionGet()
+            SearchResponse searchResponse = esClient.search(searchRequest)
             // aggregations = searchResponse.getAggregations().getAsMap()
             // responseString = searchResponse.toString()
             return searchResponse
