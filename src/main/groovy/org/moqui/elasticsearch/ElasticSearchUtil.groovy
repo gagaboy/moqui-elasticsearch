@@ -16,6 +16,7 @@ package org.moqui.elasticsearch
 import groovy.json.JsonOutput
 import groovy.transform.CompileStatic
 import org.elasticsearch.action.search.SearchRequest
+import org.elasticsearch.action.search.SearchRequestBuilder
 import org.elasticsearch.action.search.SearchResponse
 import org.elasticsearch.index.query.QueryBuilders
 import org.elasticsearch.search.aggregations.AggregationBuilder

@@ -64,7 +64,6 @@ network.host:
 discovery.type: single-node
 
 # CORS settings for local testing only
-
 # http.cors.enabled: true
 # http.cors.allow-origin: '*'
 # http.enabled: true
