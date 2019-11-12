@@ -25,7 +25,7 @@ def frameworkDir = file(moquiDir.absolutePath + '/framework')
 apply plugin: 'com.github.ben-manes.versions'
 buildscript {
   repositories { jcenter() }
-  dependencies { classpath 'com.github.ben-manes:gradle-versions-plugin:0.20.0' }
+  dependencies { classpath 'com.github.ben-manes:gradle-versions-plugin:0.21.0' }
 }
 dependencyUpdates.resolutionStrategy = { componentSelection { rules -> rules.all { ComponentSelection selection ->
     boolean rejected = ['alpha', 'beta', 'rc', 'cr', 'm', 'pr'].any { qualifier -> selection.candidate.version ==~ /(?i).*[.-]${qualifier}[.\d-]*/ }
@@ -47,9 +47,9 @@ dependencies {
     // ElasticSearch Libraries, including Lucene
     compile 'org.elasticsearch:elasticsearch:6.3.2' // Apache 2.0
     // ElasticSearch uses jackson-dataformat-smile, -yaml, -cbor pulling in jackson-core, also used by OrientDB, but gets an older version
-    compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-smile:2.9.8'
-    compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.9.8'
-    // now included in framework, also used by moqui-aws: compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.9.8'
+    compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-smile:2.9.9'
+    compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.9.9'
+    // now included in framework, also used by moqui-aws: compile 'com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.9.9'
     // JNA, needed by ElasticSearch when running embedded, now included as a dependency: compile 'net.java.dev.jna:jna:4.5.0' // Apache 2.0
     // not currently needed/used: compile 'net.java.dev.jna:jna-platform:4.5.0' // Apache 2.0
 
@@ -57,14 +57,9 @@ dependencies {
     compile 'org.codelibs.elasticsearch.lib:plugin-classloader:6.3.2'
     compile 'org.codelibs.elasticsearch.module:transport-netty4:6.3.2'
     compile 'org.codelibs.elasticsearch.module:reindex:6.3.2'
+    // painless script
+    compile 'org.codelibs.elasticsearch.module:lang-painless:6.3.2'
     // groovy script lang no longer supported as of ES6: compile module('org.codelibs.elasticsearch.module:lang-groovy:6.3.2')
-
-    // painless script needs antlr4, asm-all (if added put in framework and do modules for pegdown/parboiled so it it shared)
-    // problem with lang-painless: 450KB jar file, can't come from jcenter so far, so using groovy in spite of warnings
-    // NOTE from additional attempt: if asm-debug-all jar goes in framework libs it gets loaded by parent/root ClassLoader so
-    //     MClassloader loaded classes, ie those in component lib directories, can't be found as it uses getClass().getClassLoader()
-    // antlr4 needed for painless script module
-    // compile 'org.antlr:antlr4-runtime:4.5.3'
 
     // would be nice, but doesn't exist: compile 'org.codelibs.elasticsearch.plugins:discovery-ec2:6.3.2'
 
